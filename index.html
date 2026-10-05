@@ -17,7 +17,7 @@
   <div class="brand">Kontraktsrätt</div><div class="sub">Studiebok · endast föreläsningsmaterial</div>
   <div class="searchBox"><input id="sideSearch" placeholder="Sök i hela studieboken…"></div>
   <nav class="nav" id="nav"></nav>
-  <div class="tools"><button id="themeBtn">◐ Växla tema</button><button id="resetBtn">↺ Nollställ kortprogression</button></div>
+  <div class="tools"><button id="themeBtn">◐ Växla tema</button><button id="exportBtn">↓ Exportera progression</button><button id="importBtn">↑ Importera progression</button><input id="importFile" type="file" accept="application/json,.json" hidden><button id="resetBtn">↺ Nollställ kortprogression</button></div>
 </aside>
 <main class="main">
 <div class="topbar"><button id="menuBtn">☰</button><b>Kontraktsrätt</b><button id="mobileSearch">⌕</button></div>
@@ -58,6 +58,31 @@ function doSearch(q){q=q.trim();state.lastSearch=q;state.query=q;state.view='sea
 function closeMenu(){document.getElementById('side').classList.remove('open')}
 document.getElementById('sideSearch').addEventListener('keydown',e=>{if(e.key==='Enter')doSearch(e.target.value);if(e.key==='Escape'){e.target.value='';state.query='';state.lastSearch='';state.view='home';render()}})
 document.getElementById('themeBtn').onclick=()=>{saved.theme=saved.theme==='dark'?'light':'dark';persist();render()}
+function progressPayload(){return {app:'kontraktsratt-study',formatVersion:1,seedVersion:DATA.seedVersion,exportedAt:new Date().toISOString(),data:saved}}
+function exportProgress(){
+  const blob=new Blob([JSON.stringify(progressPayload(),null,2)],{type:'application/json'});
+  const name='kontraktsratt-progression-'+new Date().toISOString().slice(0,10)+'.json';
+  const file=new File([blob],name,{type:'application/json'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    navigator.share({title:'Kontraktsrätt – progression',files:[file]}).catch(()=>downloadBlob(blob,name));
+  }else downloadBlob(blob,name);
+}
+function downloadBlob(blob,name){
+  const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+async function importProgressFile(file){
+  try{
+    const obj=JSON.parse(await file.text());
+    const d=obj&&obj.app==='kontraktsratt-study'?obj.data:obj;
+    if(!d||typeof d!=='object'||typeof d.ratings!=='object'||!Array.isArray(d.custom))throw new Error('Ogiltig säkerhetskopia');
+    if(!confirm('Importera progressionen från filen? Nuvarande progression på den här enheten ersätts.'))return;
+    saved={seedVersion:DATA.seedVersion,ratings:d.ratings||{},custom:d.custom||[],theme:d.theme||saved.theme||'light'};
+    persist();render();alert('Progressionen har importerats.');
+  }catch(e){alert('Kunde inte importera filen: '+e.message)}
+}
+document.getElementById('exportBtn').onclick=exportProgress;
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').onchange=e=>{const file=e.target.files&&e.target.files[0];if(file)importProgressFile(file);e.target.value=''};
 document.getElementById('resetBtn').onclick=()=>{if(confirm('Nollställa endast flashcard-progressionen?')){saved.ratings={};persist();render()}}
 document.getElementById('menuBtn').onclick=()=>document.getElementById('side').classList.toggle('open')
 document.getElementById('mobileSearch').onclick=()=>{document.getElementById('side').classList.add('open');setTimeout(()=>document.getElementById('sideSearch').focus(),50)}
