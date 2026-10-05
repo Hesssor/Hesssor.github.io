@@ -136,28 +136,42 @@ function scheduleSync(){
   clearTimeout(syncTimer);
   syncTimer=setTimeout(()=>syncNow(false),4000);
 }
-async function setupSync(){
+function setSyncMessage(msg){
+  const e=document.getElementById('syncMessage'); if(e)e.textContent=msg;
+}
+function openSyncDialog(){
   if(!syncKey){
     syncKey=makeSyncKey();
     localStorage.setItem(SYNC_KEY,syncKey);
-    await navigator.clipboard?.writeText(syncKey).catch(()=>{});
-    alert('Autosynk är aktiverad på den här enheten. Din synknyckel har skapats och kopierats om webbläsaren tillät det. Spara den säkert. På din andra enhet trycker du Autosynk och väljer att använda samma nyckel.');
-    await syncNow(false);
-    return;
   }
-  const choice=prompt('Autosynk är aktiv. För att koppla en annan enhet: kopiera nyckeln nedan.\n\nOm du vill använda en annan befintlig nyckel, klistra in den här och tryck OK.\n\nNuvarande nyckel:',syncKey);
-  if(choice===null)return;
-  const v=choice.trim();
-  if(v && v!==syncKey){
-    if(v.length<24){alert('Nyckeln är för kort.');return}
-    syncKey=v;localStorage.setItem(SYNC_KEY,syncKey);
-    await syncNow(true);
-  }else{
-    await navigator.clipboard?.writeText(syncKey).catch(()=>{});
-    alert('Synknyckeln är kopierad om webbläsaren tillät det.');
-  }
+  document.getElementById('syncKeyInput').value=syncKey;
+  setSyncMessage(syncKey?'Nyckeln är redo. Tryck “Spara nyckel & synka”.':'Ingen nyckel ännu.');
+  document.getElementById('syncOverlay').classList.remove('hidden');
 }
-document.getElementById('syncBtn').onclick=setupSync;
+function closeSyncDialog(){document.getElementById('syncOverlay').classList.add('hidden')}
+async function saveSyncKeyAndSync(){
+  const v=document.getElementById('syncKeyInput').value.trim();
+  if(v.length<24){setSyncMessage('Nyckeln är för kort.');return}
+  syncKey=v;
+  localStorage.setItem(SYNC_KEY,syncKey);
+  setSyncMessage('Synkroniserar…');
+  await syncNow(false);
+  setSyncMessage(document.getElementById('syncStatus').textContent);
+}
+document.getElementById('syncBtn').onclick=openSyncDialog;
+document.getElementById('syncCloseBtn').onclick=closeSyncDialog;
+document.getElementById('syncOverlay').onclick=e=>{if(e.target.id==='syncOverlay')closeSyncDialog()};
+document.getElementById('syncSaveBtn').onclick=saveSyncKeyAndSync;
+document.getElementById('syncCopyBtn').onclick=async()=>{
+  const v=document.getElementById('syncKeyInput').value.trim();
+  try{
+    await navigator.clipboard.writeText(v);
+    setSyncMessage('Synknyckeln är kopierad.');
+  }catch(e){
+    document.getElementById('syncKeyInput').select();
+    setSyncMessage('Kopiera nyckeln manuellt från fältet.');
+  }
+};
 window.addEventListener('online',()=>syncNow(false));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow(false)});
 setInterval(()=>{if(document.visibilityState==='visible')syncNow(false)},60000);
